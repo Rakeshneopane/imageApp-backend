@@ -11,9 +11,7 @@ const router = express.Router();
 
 const isProduction = process.env.NODE_ENV === "production";
 
-const FRONTEND_URL = process.env.NODE_ENV === 'production'
-  ? 'https://image-app-frontend-mu.vercel.app'
-  : 'http://localhost:5173';
+const FRONTEND_URL = process.env.FRONTEND_URL;
 
 router.get("/google", (req,res, next)=>{
     try {
