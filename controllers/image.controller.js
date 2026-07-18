@@ -5,6 +5,7 @@ const { AlbumModel } = require("../models/album.model");
 const joi = require("joi");
 const fs = require("fs");
 const path = require("path");
+const mongoose = require("mongoose");
 
 const { cloudinary } = require("../utils/uploadExport");
 const { triggerCaptioning, searchImages  } = require("../utils/aiService");
@@ -309,7 +310,10 @@ const smartSearch = async (req, res, next) => {
         }
 
         const aiResults = await searchImages(query, 20);
-        const imageIds = aiResults.map((r) => r.image_id);
+        
+        const imageIds = aiResults
+            .map((r) => r.image_id)
+            .filter((id) => mongoose.Types.ObjectId.isValid(id));
 
         const filter = { _id: { $in: imageIds } };
         if (albumId) filter.albumId = albumId;
