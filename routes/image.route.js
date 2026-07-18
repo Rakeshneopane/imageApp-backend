@@ -1,7 +1,7 @@
 const express = require("express");
 const { upload } = require("../utils/uploadExport");
 
-const { imageUpload, deleteImages, getFavorites, getParticularImage, getImages, addComment, toggleFavorite, imageFilter } = require("../controllers/image.controller");
+const { imageUpload, deleteImages, getFavorites, getParticularImage, getImages, addComment, toggleFavorite, imageFilter, smartSearch } = require("../controllers/image.controller");
 const { verifyMiddleware } = require("../middleware/auth.middleware");
 
 const imageRouter = express.Router();
@@ -18,6 +18,8 @@ imageRouter.get("/:albumId/images/filter", verifyMiddleware, imageFilter);
 // albumId se saari images done
 imageRouter.get("/:albumId/images", verifyMiddleware, getImages);
 
+//ai smart search
+imageRouter.get("/search", verifyMiddleware, smartSearch);
 
 // specific image done
 imageRouter.get("/:imageId", verifyMiddleware, getParticularImage);

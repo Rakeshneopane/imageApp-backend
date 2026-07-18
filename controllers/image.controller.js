@@ -7,6 +7,7 @@ const fs = require("fs");
 const path = require("path");
 
 const { cloudinary } = require("../utils/uploadExport");
+const { triggerCaptioning, searchImages  } = require("../utils/aiService");
 
 // joi array checks and added url required
 const imageSchemaValidate = joi.object({
@@ -91,6 +92,12 @@ const imageUpload = async(req,res,next)=>{
         if(!uploadedImage.length) {
             throw createError("Server Error: Image Upload Failed", 500)
         }
+
+        uploadedImage.forEach((img) => {
+            triggerCaptioning(img._id.toString(), img.url).catch((err) => {
+                console.error("AI captioning trigger failed:", err.message);
+            });
+        });
         
         return res.status(201).json({
             message: "Image details uploaded to database successfully",
@@ -294,4 +301,33 @@ const addComment = async(req, res, next)=>{
     }
 }
 
-module.exports = { imageUpload, deleteImages, getFavorites, getParticularImage, getImages, addComment, toggleFavorite, imageFilter };
+const smartSearch = async (req, res, next) => {
+    try {
+        const { query, albumId } = req.query;
+        if (!query) {
+            throw createError("Client error: search query is required", 400);
+        }
+
+        const aiResults = await searchImages(query, 20);
+        const imageIds = aiResults.map((r) => r.image_id);
+
+        const filter = { _id: { $in: imageIds } };
+        if (albumId) filter.albumId = albumId;
+
+        const images = await ImageModel.find(filter);
+
+        // preserve the AI's relevance ranking, since Mongo's $in doesn't guarantee order
+        const orderedImages = imageIds
+            .map((id) => images.find((img) => img._id.toString() === id))
+            .filter(Boolean);
+
+        return res.status(200).json({
+            message: "Search completed successfully",
+            images: orderedImages,
+        });
+    } catch (error) {
+        next(error);
+    }
+};
+
+module.exports = { imageUpload, deleteImages, getFavorites, getParticularImage, getImages, addComment, toggleFavorite, imageFilter, smartSearch };
