@@ -19,10 +19,18 @@ const backfill = async () => {
 
     for (const image of images) {
         try {
-            await axios.post(`${AI_SERVICE_URL}/caption`, {
+            const response = await axios.post(`${AI_SERVICE_URL}/caption`, {
                 image_id: image._id.toString(),
                 image_url: image.url,
-            });
+            },
+            { headers: { "X-API-Key": process.env.INTERNAL_API_KEY } }
+        );
+
+            await ImageModel.findByIdAndUpdate(image._id, {
+                    caption: response.data.caption,
+                    tags: response.data.tags,
+                });
+
             success++;
             console.log(`[${success + failed}/${images.length}] Captioned: ${image.name}`);
         } catch (err) {
@@ -36,4 +44,4 @@ const backfill = async () => {
     await mongoose.disconnect();
 };
 
-//backfill();
+// backfill();

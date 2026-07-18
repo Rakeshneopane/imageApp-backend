@@ -30,6 +30,10 @@ const ImageSchema = new mongoose.Schema({
         type: [String],
         default: [],
     },
+    caption: {
+        type: String,
+        default: "",
+    },
     size: {
         type: Number,
         required: true,

@@ -1,15 +1,16 @@
 const axios = require("axios");
-
+const { ImageModel } = require("../models/image.model");
 const AI_SERVICE_URL = process.env.AI_SERVICE_URL || "http://localhost:8000";
 
 const triggerCaptioning = async (imageId, imageUrl) => {
-  await axios.post(`${AI_SERVICE_URL}/caption`, 
-    { image_id: imageId,image_url: imageUrl},
-    {
-    headers: {
-      "X-API-Key": process.env.INTERNAL_API_KEY,
-    }
-  });
+  const response = await axios.post(`${AI_SERVICE_URL}/caption`, 
+    { image_id: imageId, image_url: imageUrl},
+    { headers: { "X-API-Key": process.env.INTERNAL_API_KEY } }
+  );
+  await ImageModel.findByIdAndUpdate(imageId, {
+      caption: response.data.caption,
+      tags: response.data.tags,
+    });
 };
 
 const searchImages = async (query, limit = 10) => {
