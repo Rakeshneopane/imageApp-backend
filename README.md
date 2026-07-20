@@ -88,6 +88,7 @@ The finished application matters less than the lessons learned while building it
 - 🏷️ **Tags** — Add tags, filter by tag
 - 💬 **Comments** — Per-image, appended via `$push`
 - 🗑️ **Clean deletes** — Removes from DB *and* Cloudinary
+- 🔍 **AI Semantic Search** — natural-language search across an album ("a dog on a wooden floor") via a companion Python/FastAPI microservice, not exact tag matching
 
 ### Infrastructure
 - 📄 **Pagination** — Every list endpoint supports `page` + `limit`
@@ -200,6 +201,7 @@ The focus was not just building features, but building features that fail predic
 | PUT | `/image/:imageId/toggle` | Toggle `isFavorite` |
 | PATCH | `/image/:imageId/comment` | Append a comment — body: `{ "comment": "string" }` |
 | DELETE | `/image/delete/:imageId` | Delete from DB + Cloudinary |
+| GET | `/image/search?query=&albumId=` | AI-powered semantic search across an album |
 
 ---
 
@@ -230,6 +232,7 @@ The focus was not just building features, but building features that fail predic
   albumId: ObjectId → Album,  // indexed
   name, url, size, cloudinaryId (unique),
   tags: [String],             // indexed
+  caption: String,            // AI-generated, via companion microservice
   person: [String],
   isFavorite: Boolean,        // indexed
   comments: [String]
@@ -289,6 +292,22 @@ fetch(url, { credentials: "include" });
 **The problem:** If `countDocuments` fails, `Promise.all` crashes the entire request.
 
 **The fix:** `Promise.allSettled` allows graceful degradation — pagination breaks but albums still load.
+
+### 5. Two Databases, No Shared ID Space
+
+**What worked in testing:** manually POSTing to the AI service's `/search` endpoint and getting results back.
+
+**What broke in production:** `smartSearch` crashed with a Mongoose `CastError` — `Cast to ObjectId failed for value "test-001"`.
+
+**The root cause:** the AI service stores its own `image_id` in a separate Postgres database, with no foreign-key relationship to MongoDB's `_id`s. Leftover test data from manual curl testing had non-ObjectId strings sitting in that table. When `/search` returned one, Mongoose tried to cast it and blew up.
+
+**The fix:** filter AI-service results against `mongoose.Types.ObjectId.isValid()` before ever handing them to a MongoDB query — two systems with no shared referential integrity means the calling side has to defend itself.
+
+```js
+const imageIds = aiResults
+  .map((r) => r.image_id)
+  .filter((id) => mongoose.Types.ObjectId.isValid(id));
+```
 
 ---
 
@@ -367,6 +386,7 @@ FRONTEND_URL=http://localhost:5173
 - Bulk image upload to Cloudinary
 - Favorites, tags, comments, filtering
 - Pagination on all list endpoints
+- AI-powered image captioning and semantic search (Python/FastAPI + Gemini + pgvector, see [ai-service repo](https://github.com/Rakeshneopane/kaviospix-aiservice))
 
 **In Progress**
 - Refresh token rotation
