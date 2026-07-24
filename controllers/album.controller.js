@@ -106,59 +106,96 @@ const deleteAlbum = async(req,res,next)=>{
     }
 };
 
-const getAlbums = async(req,res, next)=>{
+const getAlbums = async (req, res, next) => {
     const user = req.user;
+
     const page = parseInt(req.query.page) || 1;
     const limit = parseInt(req.query.limit) || 100;
     const skip = (page - 1) * limit;
+
     const ownerId = user._id;
+
     try {
         const ownedCount = await AlbumModel.countDocuments({ ownerId });
 
-        if(ownedCount === 0) {
+        if (ownedCount === 0) {
             const defaultAlbum = await AlbumModel.create({
                 name: "Default Album",
                 description: "My default album",
                 ownerId,
                 sharedUserIds: [],
-                isDefault: true, 
+                isDefault: true,
             });
 
-            if(!defaultAlbum) 
-                throw createError("Unable to create default album", 401);
-
             return res.status(200).json({
-                success: true, 
-                message: "Default album created", 
-                albums: [defaultAlbum],
+                success: true,
+                message: "Default album created",
+                albums: [
+                    {
+                        ...defaultAlbum.toObject(),
+                        photoCount: 0,
+                        coverImage: null,
+                    },
+                ],
                 pagination: {
                     totalItems: 1,
                     totalPages: 1,
-                    currentPage: 1
-                }
-            })
+                    currentPage: 1,
+                },
+            });
         }
 
-        const [albumsData, totalAlbum] = await Promise.allSettled([
-            AlbumModel.find({
-                $or: [{ ownerId }, { sharedUserIds: ownerId }]}).skip(skip).limit(limit), 
-            AlbumModel.countDocuments({
-                $or: [{ ownerId }, { sharedUserIds: ownerId }]
-            })
+        const query = {
+            $or: [
+                { ownerId },
+                { sharedUserIds: ownerId },
+            ],
+        };
+
+        const [albums, total] = await Promise.all([
+            AlbumModel.find(query)
+                .sort({ createdAt: -1 })
+                .skip(skip)
+                .limit(limit)
+                .lean(),
+
+            AlbumModel.countDocuments(query),
         ]);
-        const albums = albumsData.status === "fulfilled" ? albumsData.value : [];
-        const total = totalAlbum.status === "fulfilled" ? totalAlbum.value: 0;
+
+        const albumsWithImages = await Promise.all(
+            albums.map(async (album) => {
+                const [photoCount, coverImage] = await Promise.all([
+                    ImageModel.countDocuments({
+                        albumId: album._id,
+                    }),
+
+                    ImageModel.findOne({
+                        albumId: album._id,
+                    })
+                        .sort({ createdAt: -1 })
+                        .select("url")
+                        .lean(),
+                ]);
+
+                return {
+                    ...album,
+                    photoCount,
+                    coverImage: coverImage?.url || null,
+                };
+            })
+        );
 
         return res.status(200).json({
-            success: true, 
-            message: "Fetched the ablums sucessfully",
-            albums: albums,
-            pagination : {
+            success: true,
+            message: "Fetched the albums successfully",
+            albums: albumsWithImages,
+            pagination: {
                 totalItems: total,
-                totalPages: Math.ceil(total/limit),
-                currentPage: page
-            }
+                totalPages: Math.ceil(total / limit),
+                currentPage: page,
+            },
         });
+
     } catch (error) {
         next(error);
     }
